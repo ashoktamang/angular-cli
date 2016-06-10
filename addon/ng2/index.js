@@ -25,6 +25,7 @@ module.exports = {
 
       // Easter eggs.
       'make-this-awesome': require('./commands/easter-egg')('make-this-awesome'),
+      'promote': require('./commands/promote'),
 
       // Configuration.
       'set': require('./commands/set'),
