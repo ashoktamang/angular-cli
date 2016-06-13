@@ -3,10 +3,14 @@ import * as ts from 'typescript';
 import * as Command from 'ember-cli/lib/models/command';
 import * as path from 'path';
 import * as child_process from 'child_process';
+import * as fs from 'fs';
+var chalk = require('chalk');
+import * as addBarrelREgistration from '../utilites/barrel-management';
+
 
 const PromoteCommand = Command.extend({
   name: 'promote',
-  description: 'outputs angular-cli version',
+  description: 'Updates component promotion if it is safe',
   // aliases: ['v', '--version', '-v'],
   works: 'everywhere',
 
@@ -14,8 +18,71 @@ const PromoteCommand = Command.extend({
   //   name: 'verbose',
   //   type: Boolean, 'default': false
   // }],
-
-  run: function (options) {
+  
+  beforeRun: function(rawArgs: string) {
+    // Checks empty arguments
+    if (rawArgs.length < 2) {
+      console.log('error');
+      // return;
+    };
+    
+    
+    
+    // Checks if arguments are path or specific file.
+    // Error for specific files (for now!)
+    rawArgs.forEach(argument => {
+      console.log(path.extname(argument));
+      if (!path.extname(argument) == '') {
+        console.log('error');
+        // return;
+      };
+    })
+  },
+  
+  run: function (options, rawArgs) {
+    
+    console.log(options);
+    console.log(rawArgs);
+    
+    //sourcePath and destinationPath
+    let sourcePath = rawArgs[0];
+    let destinationPath = rawArgs[1];
+    
+    // Case 0: Check whether destinationPath exists; if not, make one:
+    // fs.open(destinationPath, 'a+', (err, d) => {
+    //   if (err) fs.mkdir(destinationPath, (created) => {
+    //     this.ui.writeLine(chalk.green(destinationPath + 'is created' + created))
+    //   })
+    // })
+    
+    // Case 1: If sourcePath and destinationPath has same parent directory.
+    // [Todo: Update references in files]
+    if (path.dirname(sourcePath) === path.dirname(destinationPath)) {
+      let oldComponentName = path.basename(sourcePath);
+      let newComponentName = path.basename(destinationPath);
+      let relativePath: string = process.cwd();
+      
+      fs.rename(sourcePath, destinationPath);
+      
+      let files: string[] = fs.readdirSync(sourcePath);
+      console.log(files);
+      files.forEach(file => {
+        console.log(file.indexOf(oldComponentName) > -1);
+        if (file.indexOf(oldComponentName) > -1) {
+          console.log(file);
+          let newFileName = file.replace(oldComponentName, newComponentName);
+          console.log(newFileName);
+          fs.rename(path.join(relativePath, destinationPath, file), path.join(relativePath, destinationPath, newFileName));
+          console.log(path.join(relativePath, destinationPath, file));
+          console.log(path.join(relativePath, destinationPath, newFileName));
+        }
+      })
+    }
+    
+    
+    
+    console.log('process', process.cwd());
+    // console.log('project', this.project);
     
     
     // Returns the name of SyntaxKind from the enum
@@ -87,20 +154,20 @@ const PromoteCommand = Command.extend({
     }
     
     const fileNames = process.argv.slice(3);
-    fileNames.forEach(fileName => {
-      let sourceFile = ts.createSourceFile(fileName, readFileSync(fileName).toString(), ts.ScriptTarget.ES6, true);
-      console.log(sourceFile);
-      sourceFile.SymbolWriter.writeKeyword('hello');
+    console.log(fileNames);
+  //   fileNames.forEach(fileName => {
+  //     let sourceFile = ts.createSourceFile(fileName, readFileSync(fileName).toString(), ts.ScriptTarget.ES6, true);
+  //     // console.log(sourceFile);
       
-      // console.log(importDeclaration(sourceFile));
+  //     // console.log(importDeclaration(sourceFile));
       
       
-      // visit(sourceFile);
-      // printAllChildren(sourceFile);
-    });
+  //     // visit(sourceFile);
+  //     // printAllChildren(sourceFile);
+  //   });
     
-    // console.log(ts.sys.getCurrentDirectory());
-  },
+  //   // console.log(ts.sys.getCurrentDirectory());
+  // },
 
   
 });
