@@ -48,13 +48,6 @@ const PromoteCommand = Command.extend({
     let sourcePath = rawArgs[0];
     let destinationPath = rawArgs[1];
     
-    // Case 0: Check whether destinationPath exists; if not, make one:
-    // fs.open(destinationPath, 'a+', (err, d) => {
-    //   if (err) fs.mkdir(destinationPath, (created) => {
-    //     this.ui.writeLine(chalk.green(destinationPath + 'is created' + created))
-    //   })
-    // })
-    
     // Case 1: If sourcePath and destinationPath has same parent directory.
     // [Todo: Update references in files]
     if (path.dirname(sourcePath) === path.dirname(destinationPath)) {
@@ -79,10 +72,8 @@ const PromoteCommand = Command.extend({
       })
     }
     
-    
-    
-    console.log('process', process.cwd());
-    // console.log('project', this.project);
+
+    // 
     
     
     // Returns the name of SyntaxKind from the enum

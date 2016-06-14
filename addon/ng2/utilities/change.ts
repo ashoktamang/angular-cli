@@ -3,7 +3,7 @@
 import * as ts from 'typescript';
 import * as fs from 'fs';
 
-interface Change {
+export interface Change {
 /**
  *  True on success, false otherwise.
  */  
@@ -11,21 +11,21 @@ interface Change {
 
   // The file this change should be applied to. Some changes might not apply to
   // a file (maybe the config).
-  readonly path: string | null;
+  path: string | null;
 
   // The order this change should be applied. Normally the position inside the file.
   // Changes are applied from the bottom of a file to the top.
-  readonly order: number | null;
+  order: number | null;
 
   // The description of this change. This will be outputted in a dry or verbose run.
-  readonly description: string;
+  description: string;
 }
 
 
 
 
 // Will add text to the source code.
-class InsertChange implements Change {
+export class InsertChange implements Change {
   
   const path: string;
   contentString: string;
@@ -58,7 +58,7 @@ class InsertChange implements Change {
   
 }
 // Will remove text from the source code.
-class RemoveChange implements Change {
+export class RemoveChange implements Change {
     const path: string;
     const pos: number;
     const toRemove: string;
@@ -85,7 +85,7 @@ class RemoveChange implements Change {
   }
 }
 // Will replace text from the source code.
-class ReplaceChange implements Change {
+export class ReplaceChange implements Change {
   const path: string;
   contentString: string;
   const pos: number;
@@ -113,7 +113,7 @@ class ReplaceChange implements Change {
   }
 }
 // Will output a message for the user to fulfill.
-class MessageChange implements Change {
+export class MessageChange implements Change {
   constructor(text: string){
       
   }
