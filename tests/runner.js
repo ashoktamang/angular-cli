@@ -34,13 +34,9 @@ var Mocha = require('mocha');
 var glob = require('glob');
 var path = require('path');
 
-// var root = 'tests/{acceptance,models,e2e}';
+var root = 'tests/{acceptance,models,e2e}';
 
-// Only running test on acceptance test files
-var root = 'tests/acceptance';
-
-// var specFiles = glob.sync(root + '/**/*.spec.*');
-var specFiles = glob.sync(root + '/change.spec.js');
+var specFiles = glob.sync(root + '/**/*.spec.*');
 var mocha = new Mocha({ timeout: 5000, reporter: 'spec' });
 
 process.env.CLI_ROOT = process.env.CLI_ROOT || path.resolve(__dirname, '..');
