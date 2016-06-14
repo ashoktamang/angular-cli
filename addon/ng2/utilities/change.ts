@@ -7,7 +7,7 @@ interface Change {
 /**
  *  True on success, false otherwise.
  */  
- apply(): boolean;
+ apply(): Promise<void>;
 
   // The file this change should be applied to. Some changes might not apply to
   // a file (maybe the config).
@@ -27,95 +27,100 @@ interface Change {
 // Will add text to the source code.
 class InsertChange implements Change {
   
-  const path: string;
-  contentString: string;
   const order: number; //don't know what this does yet
-  const toAdd: string;
   const description: string =  "";
-  const pos: number;
   
   /**
    * @param file (path to file)
    * @param pos
    * @param toAdd (text to add)
+   * @return Promise with a description on success or reject on error
    */
-  constructor(file: string, pos: number, toAdd: string){
-      this.path = file;
-      this.contentString = fs.readFileSync(this.path).toString();
-      this.toAdd = toAdd;
-      this.pos = pos;
-  }
+  constructor(public path: string, private pos: number, private toAdd: string){ }
   
-  apply(): boolean{
-      this.contentString = this.contentString.substring(0, this.pos)
-                           + this.toAdd + this.contentString.substring(this.pos);
-      fs.writeFileSync(this.path, this.contentString, (err: any) => {
-          if (err) return false;
-          this.description = "Inserted '" + this.toAdd + "' to file";
+  apply(): Promise<any>{
+    return new Promise<any>((resolve, reject) => {
+           var content: string;
+           fs.readFile(this.path, (err, data) => {
+                             if(err) reject(err);
+                             content = data.toString();
+           });
+           content = content.substring(0, this.pos) + this.toAdd + content.substring(this.pos);
+           
+           fs.writeFile(this.path, content, (err: any) => {
+              if (err) reject(err);
+              this.description = "Inserted '" + this.toAdd + "' to file";
+              resolve(this.description);
+           });
       });
-      return true;
   }
-  
 }
+
 // Will remove text from the source code.
 class RemoveChange implements Change {
-    const path: string;
-    const pos: number;
-    const toRemove: string;
     const order: number;
-    contentString: string;
     const description: string = "";
 
     
-  constructor(file: string, pos: number, toRemove: string){
-      this.path = file;
-      this.pos = pos;
-      this.toRemove = toRemove;
-      this.contentString = fs.readFileSync(this.path).toString();
-  }
+  constructor(public path: string, private pos: number, private toRemove: string){ }
   
-  apply(): boolean{
-      this.contentString = this.contentString.substring(0, this.pos)
-                           + this.contentString.substring(this.pos + this.toRemove.length);
-      fs.writeFileSync(this.path, this.contentString, (err: any) => {
-          if (err) return false;
-          this.description = "Removed '" + this.toRemove + "' from file";
+  apply(): Promise<any>{
+      return new Promise<any>((resolve, reject) => {
+          var content: string;
+          fs.readFile(this.path, (err, data) => {
+                      if(err) reject(err);
+                      content = data.toString();
+          });
+          content = content.substring(0, this.pos) + content.substring(this.pos + this.toRemove.length);
+
+          fs.writeFile(this.path, content, (err: any) => {
+          if (err) reject(err);
+             this.description = "Removed '" + this.toRemove + "' from file";
+             resolve(this.description);
+          });
       });
-      return true;
   }
 }
+
 // Will replace text from the source code.
 class ReplaceChange implements Change {
-  const path: string;
-  contentString: string;
-  const pos: number;
-  const oldText: string;
-  const newText: string;
   const description: string = "";
   
   
-  constructor(file: string, pos: number, oldText: string, newText: string){
-      this.path = file;
-      this.pos = pos;
-      this.oldText = oldText;
-      this.newText = newText;
-      this.contentString = fs.readFileSync(this.path).toString();
-  }
+  constructor(public path: string, private pos: number, private oldText: string, private newText: string){ }
   
-  apply(): boolean{
-      this.contentString = this.contentString.substring(0, this.pos) + this.newText
-                           + this.contentString.substring(this.pos + this.oldText.length);
-      fs.writeFileSync(this.path, this.contentString, (err: any) => {
-          if (err) return false;
-          this.description = "Replaced '" + this.oldText + "' with '" + this.newText + "' in file";
+  apply(): Promise<any>{
+
+      return new Promise<any>((resolve, reject) => {
+          var content: string;
+          fs.readFile(this.path, (err, data) => {
+                      if(err) reject(err);
+                      content = data.toString();
+          });
+          content = content.substring(0, this.pos) + this.newText + content.substring(this.pos + this.oldText.length);
+
+          fs.writeFile(this.path, content, (err: any) => {
+          if (err) reject(err);
+             this.description = "Replaced '" + this.oldText + "' with '" + this.newText + "' in file";
+             resolve(this.description);
+          });
       });
-      return true;
   }
 }
+
 // Will output a message for the user to fulfill.
 class MessageChange implements Change {
   constructor(text: string){
       
   }
-  apply(): Promise{}
+  apply(): Promise<void> {return new Promise();}
 }
+
+
+
+//partitions
+// file, pos, oldtext , new text;
+// file: correct, incorrect path 
+// pos: negative number, 0, intMax, 0<x<intMax 
+// oldText: empty, non-empty
+// newText: empty, non-empy
