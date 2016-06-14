@@ -2,6 +2,7 @@
 
 import * as ts from 'typescript';
 import * as fs from 'fs';
+import { readWithPromise, writeWithPromise } from './fs-promise';
 
 export interface Change {
 /**
@@ -22,70 +23,55 @@ export interface Change {
 }
 
 
-
-
-// Will add text to the source code.
+/**
+ * Will add text to the source code.
+ */
 export class InsertChange implements Change {
   
   const order: number; //don't know what this does yet
   const description: string =  "";
+  // content: string;
   
+  constructor(public path: string, private pos: number, private toAdd: string){ }
+
   /**
+   * This method does not insert spaces if there is none in the original string. 
    * @param file (path to file)
    * @param pos
    * @param toAdd (text to add)
    * @return Promise with a description on success or reject on error
    */
-  constructor(public path: string, private pos: number, private toAdd: string){ }
-  
   apply(): Promise<any>{
-    return new Promise<any>((resolve, reject) => {
-           var content: string;
-           fs.readFile(this.path, (err, data) => {
-                             if(err) reject(err);
-                             content = data.toString();
-           });
-           content = content.substring(0, this.pos) + this.toAdd + content.substring(this.pos);
-           
-           fs.writeFile(this.path, content, (err: any) => {
-              if (err) reject(err);
-              this.description = "Inserted '" + this.toAdd + "' to file";
-              resolve(this.description);
-           });
-      });
+    return readWithPromise(this.path).then(content => {
+      content = content.substring(0, this.pos) + this.toAdd + content.substring(this.pos);
+      return writeWithPromise(this.path, content);
+    });
   }
 }
 
-// Will remove text from the source code.
-
-class RemoveChange implements Change {
+/**
+ * Will remove text from the source code.
+ */ 
+export class RemoveChange implements Change {
     const order: number;
     const description: string = "";
 
-    
   constructor(public path: string, private pos: number, private toRemove: string){ }
   
   apply(): Promise<any>{
-      return new Promise<any>((resolve, reject) => {
-          var content: string;
-          fs.readFile(this.path, (err, data) => {
-                      if(err) reject(err);
-                      content = data.toString();
-          });
-          content = content.substring(0, this.pos) + content.substring(this.pos + this.toRemove.length);
 
-          fs.writeFile(this.path, content, (err: any) => {
-          if (err) reject(err);
-             this.description = "Removed '" + this.toRemove + "' from file";
-             resolve(this.description);
-          });
-      });
+    return readWithPromise(this.path).then(content => {
+      content = content.substring(0, this.pos) + content.substring(this.pos + this.toRemove.length);
+      
+      return writeWithPromise(this.path, content);
+    });
   }
 }
 
-// Will replace text from the source code.
-
-class ReplaceChange implements Change {
+/**
+ * Will replace text from the source code.
+ */
+export class ReplaceChange implements Change {
 
   const description: string = "";
   
@@ -93,25 +79,17 @@ class ReplaceChange implements Change {
   constructor(public path: string, private pos: number, private oldText: string, private newText: string){ }
   
   apply(): Promise<any>{
-
-      return new Promise<any>((resolve, reject) => {
-          var content: string;
-          fs.readFile(this.path, (err, data) => {
-                      if(err) reject(err);
-                      content = data.toString();
-          });
-          content = content.substring(0, this.pos) + this.newText + content.substring(this.pos + this.oldText.length);
-
-          fs.writeFile(this.path, content, (err: any) => {
-          if (err) reject(err);
-             this.description = "Replaced '" + this.oldText + "' with '" + this.newText + "' in file";
-             resolve(this.description);
-          });
-      });
+    return readWithPromise(this.path).then(content => {
+       content = content.substring(0, this.pos) + this.newText + content.substring(this.pos + this.oldText.length);
+       writeWithPromise(this.path, content);
+       this.description = "Replaced '" + this.oldText + "' with '" + this.newText + "' in file";
+    });
   }
 }
 
-// Will output a message for the user to fulfill.
+/**
+ * Will output a message for the user to fulfill.
+ */
 export class MessageChange implements Change {
   constructor(text: string){
       
@@ -119,12 +97,3 @@ export class MessageChange implements Change {
 
   apply(): Promise<void> {return new Promise();}
 }
-
-
-
-//partitions
-// file, pos, oldtext , new text;
-// file: correct, incorrect path 
-// pos: negative number, 0, intMax, 0<x<intMax 
-// oldText: empty, non-empty
-// newText: empty, non-empy

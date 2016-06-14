@@ -6,173 +6,319 @@ var change = require('../../addon/ng2/utilities/change');
 var mockFs = require('mock-fs');
 var existsSync = require('exists-sync');
 var EOL = require('os').EOL;
+var fs = require('fs');
+var fsPromise = require('../../addon/ng2/utilities/fs-promise');
 
 var Blueprint = require('ember-cli/lib/models/blueprint');
 
-describe('change', () => {
-  var blueprint;
-  var installationDirectory;
+describe('Change', () => {
   var sourcePath;
 
-  beforeEach(() => {
-    blueprint = new Blueprint('/');
-    blueprint.project = {
-      root: '/'
-    }
-  });
-
-  describe('Change', () => {
-
+  describe('Invalid Path', () => {
 
     beforeEach(() => {
       var mockDrive = {
-        '/src/app/my-component': {
+        'src/app/my-component': {
           'component-file.txt': 'hello',
         },
         
       };
       mockFs(mockDrive);
 
-      sourcePath = path.join('src', 'app', 'my-component', 'component-file.txt');
-      console.log(process.cwd());
+      sourcePath = path.join('src/app/my-component');
+
     });
 
     afterEach(() => {
       mockFs.restore();
     });
 
-    it('should add text to the source code', () => {
-      console.log(change);
-      var changeInstance = new change.InsertChange(sourcePath, 7, 'world!');
-      return changeInstance.apply().then(() => {
-        var fs = require('fs');
-        var contents = fs.readFileSync(sourcePath, 'utf8');
-        var expectedContents = 'hello world!';
-        expect(existsSync(content)).to.equal(expectedContents);
-      });
-    });
-  });
+    it('the file/directory should not exist', () => {
+      var sourceFile = path.join(sourcePath, '/some_path/component-file.txt');
+      expect(existsSync(sourceFile)).to.equal(false);
+    })
 
-  describe('no pre-existing barrel', () => {
+  });
+  
+  // Test on InsertChange
+  describe('InsertChange with valid path and valid string(s)/position to add', () => {
 
     beforeEach(() => {
       var mockDrive = {
-        '/src/app/shared/my-component': {}
+        'src/app/my-component': {
+          'component-file.txt': 'hello',
+        },
+        
       };
       mockFs(mockDrive);
 
-      installationDirectory = path.join('/src/app/shared/my-component');
+      sourcePath = path.join('src/app/my-component');
+
     });
 
     afterEach(() => {
       mockFs.restore();
     });
 
-    it('create barrel from installation dir', () => {
-      return addBarrelRegistration(blueprint, installationDirectory).then(() => {
-        var fs = require('fs');
-        var barrelPath = path.join(installationDirectory, '..', 'index.ts');
-        expect(existsSync(barrelPath)).to.equal(true);
-        var contents = fs.readFileSync(barrelPath, 'utf8');
-        var expectedContents = `export * from './my-component';${EOL}`;
-        expect(contents).to.equal(expectedContents);
-      });
-    });
-
-    it('create barrel from installation dir with file name', () => {
-      return addBarrelRegistration(blueprint, installationDirectory, 'my-smaller-component').then(() => {
-        var fs = require('fs');
-        var barrelPath = path.join(installationDirectory, '..', 'index.ts');
-        expect(existsSync(barrelPath)).to.equal(true);
-        var contents = fs.readFileSync(barrelPath, 'utf8');
-        var expectedContents = `export * from './my-component/my-smaller-component';${EOL}`;
-        expect(contents).to.equal(expectedContents);
-      });
-    });
+    it('should add text to the source code and remove text from it', () => {
+      var sourceFile = path.join(sourcePath, 'component-file.txt');
+      expect(existsSync(sourceFile)).to.equal(true);
+      var changeInstance = new change.InsertChange(sourceFile, 6, ' world!');
+      return changeInstance
+        .apply()
+        .then(() => {
+          return fsPromise.readWithPromise(sourceFile);
+        }).then(contents => {
+          var expectedContents = 'hello world!';
+          expect(contents).to.equal(expectedContents);
+        }).then(()=> {
+          var anotherChangeInstance = new change.RemoveChange(sourceFile, 6, 'world!');
+          return anotherChangeInstance
+          .apply()
+          .then(() => {
+            return fsPromise.readWithPromise(sourceFile);
+          }).then(contents => {
+            var anotherExpectedContents = 'hello ';
+            expect(contents).to.equal(anotherExpectedContents);
+          })
+        })
+    })
 
   });
 
-  describe('pre-existing barrel', () => {
+  describe('InsertChange with incorrect position', () => {
 
     beforeEach(() => {
       var mockDrive = {
-        '/src/app/shared': {
-          'my-component': {},
-          'index.ts': `export * from './another-component${EOL}export * from './other-component${EOL}`
-        }
+        'src/app/my-component': {
+          'component-file.txt': 'hello',
+        },
+        
       };
       mockFs(mockDrive);
 
-      installationDirectory = path.join('/src/app/shared/my-component');
+      sourcePath = path.join('src/app/my-component');
+
     });
 
     afterEach(() => {
       mockFs.restore();
     });
 
-    it('update barrel from installation dir', () => {
-      return addBarrelRegistration(blueprint, installationDirectory).then(() => {
-        var fs = require('fs');
-        var barrelPath = path.join(installationDirectory, '..', 'index.ts');
-        expect(existsSync(barrelPath)).to.equal(true);
-        var contents = fs.readFileSync(barrelPath, 'utf8');
-        var expectedContents = `export * from './another-component${EOL}export * from './my-component';${EOL}export * from './other-component${EOL}`;
-        expect(contents).to.equal(expectedContents);
-      });
-    });
-
-    it('updateA barrel from installation dir with file name', () => {
-      return addBarrelRegistration(blueprint, installationDirectory, 'my-smaller-component').then(() => {
-        var fs = require('fs');
-        var barrelPath = path.join(installationDirectory, '..', 'index.ts');
-        expect(existsSync(barrelPath)).to.equal(true);
-        var contents = fs.readFileSync(barrelPath, 'utf8');
-        var expectedContents = `export * from './another-component${EOL}export * from './my-component/my-smaller-component';${EOL}export * from './other-component${EOL}`;
-        expect(contents).to.equal(expectedContents);
-      });
-    });
+    it('should add text to the source code but unexpected output', () => {
+      var sourceFile = path.join(sourcePath, 'component-file.txt');
+      expect(existsSync(sourceFile)).to.equal(true);
+      var changeInstance = new change.InsertChange(sourceFile, -6, ' world!');
+      return changeInstance
+        .apply()
+        .then(() => {
+          return fsPromise.readWithPromise(sourceFile);
+        }).then(contents => {
+          var expectedContents = 'hello world!';
+          expect(contents).to.not.equal(expectedContents);
+        });
+    })
 
   });
 
-  describe('pre-existing barrel with export already defined', () => {
+  describe('InsertChange with empty string to add', () => {
 
     beforeEach(() => {
       var mockDrive = {
-        '/src/app/shared': {
-          'my-component': {},
-          'index.ts': `export * from './other-component${EOL}export * from './my-component';${EOL}export * from './another-component${EOL}export * from './my-component/my-smaller-component';${EOL}`
-        }
+        'src/app/my-component': {
+          'component-file.txt': 'hello',
+        },
+        
       };
       mockFs(mockDrive);
 
-      installationDirectory = path.join('/src/app/shared/my-component');
+      sourcePath = path.join('src/app/my-component');
+
     });
 
     afterEach(() => {
       mockFs.restore();
     });
 
-    it('update barrel from installation dir should add nothing', () => {
-      return addBarrelRegistration(blueprint, installationDirectory).then(() => {
-        var fs = require('fs');
-        var barrelPath = path.join(installationDirectory, '..', 'index.ts');
-        expect(existsSync(barrelPath)).to.equal(true);
-        var contents = fs.readFileSync(barrelPath, 'utf8');
-        var expectedContents = `export * from './another-component${EOL}export * from './my-component';${EOL}export * from './my-component/my-smaller-component';${EOL}export * from './other-component${EOL}`;
-        expect(contents).to.equal(expectedContents);
-      });
+    it('should not have any changes to the source code', () => {
+      var sourceFile = path.join(sourcePath, 'component-file.txt');
+      expect(existsSync(sourceFile)).to.equal(true);
+      var changeInstance = new change.InsertChange(sourceFile, 6, '');
+      return changeInstance
+        .apply()
+        .then(() => {
+          return fsPromise.readWithPromise(sourceFile);
+        }).then(contents => {
+          var expectedContents = 'hello';
+          expect(contents).to.equal(expectedContents);
+        });
+    })
+
+  });
+  
+  
+  
+  // Tests on RemoveChange
+
+  describe('RemoveChange with valid path and valid string(s)/position to remove', () => {
+
+
+    beforeEach(() => {
+      var mockDrive = {
+        'src/app/my-component': {
+          'component-file.txt': 'import * as foo from "./bar"',
+        },
+        
+      };
+      mockFs(mockDrive);
+      sourcePath = path.join('src/app/my-component');
     });
 
-    it('update barrel from installation dir with file name should add nothing', () => {
-      return addBarrelRegistration(blueprint, installationDirectory, 'my-smaller-component').then(() => {
-        var fs = require('fs');
-        var barrelPath = path.join(installationDirectory, '..', 'index.ts');
-        expect(existsSync(barrelPath)).to.equal(true);
-        var contents = fs.readFileSync(barrelPath, 'utf8');
-        var expectedContents = `export * from './another-component${EOL}export * from './my-component';${EOL}export * from './my-component/my-smaller-component';${EOL}export * from './other-component${EOL}`;
-        expect(contents).to.equal(expectedContents);
-      });
+    afterEach(() => {
+      mockFs.restore();
     });
 
+    it('should remove text from the source code', () => {
+      var sourceFile = path.join(sourcePath, 'component-file.txt');
+      expect(existsSync(sourceFile)).to.equal(true);
+      var changeInstance = new change.RemoveChange(sourceFile, 9, 'as foo');
+      return changeInstance
+        .apply()
+        .then(() => {
+          return fsPromise.readWithPromise(sourceFile);
+        }).then(contents => {
+          var expectedContents = 'import *  from "./bar"';
+          expect(contents).to.equal(expectedContents);
+        });
+    });
+  });
+
+  describe('RemoveChange with empty string to remove', () => {
+
+
+    beforeEach(() => { 
+      var mockDrive = {
+        'src/app/my-component': {
+          'component-file.txt': 'import * as foo from "./bar"',
+        },
+        
+      };
+      mockFs(mockDrive);
+      sourcePath = path.join('src/app/my-component');
+    });
+
+    afterEach(() => {
+      mockFs.restore();
+    });
+
+    it('should remove text from the source code', () => {
+      var sourceFile = path.join(sourcePath, 'component-file.txt');
+      expect(existsSync(sourceFile)).to.equal(true);
+      var changeInstance = new change.RemoveChange(sourceFile, 9, '');
+      return changeInstance
+        .apply()
+        .then(() => {
+          return fsPromise.readWithPromise(sourceFile);
+        }).then(contents => {
+          var expectedContents = 'import * as foo from "./bar"';
+          expect(contents).to.equal(expectedContents);
+        });
+    });
+  });
+
+  describe('ReplaceChange with valid path and valid string(s)/position to replace', () => {
+
+    beforeEach(() => {
+      var mockDrive = {
+        'src/app/my-component': {
+          'component-file.txt': 'import * as foo from "./bar"',
+        },
+        
+      };
+      mockFs(mockDrive);
+      sourcePath = path.join('src/app/my-component');
+    });
+
+    afterEach(() => {
+      mockFs.restore();
+    });
+
+    it('should replace text in the source code', () => {
+      var sourceFile = path.join(sourcePath, 'component-file.txt');
+      expect(existsSync(sourceFile)).to.equal(true);
+      var changeInstance = new change.ReplaceChange(sourceFile, 7, '* as foo', '{ fooComponent }');
+      return changeInstance
+        .apply()
+        .then(() => {
+          return fsPromise.readWithPromise(sourceFile);
+        }).then(contents => {
+          var expectedContents = 'import { fooComponent } from "./bar"';
+          expect(contents).to.equal(expectedContents);
+        });
+    });
+  });
+
+  describe('ReplaceChange with empty oldText and non-empty newText', () => {
+
+    beforeEach(() => {
+      var mockDrive = {
+        'src/app/my-component': {
+          'component-file.txt': 'import * as foo from "./bar"',
+        },
+        
+      };
+      mockFs(mockDrive);
+      sourcePath = path.join('src/app/my-component');
+    });
+
+    afterEach(() => {
+      mockFs.restore();
+    });
+
+    it('should replace text in the source code', () => {
+      var sourceFile = path.join(sourcePath, 'component-file.txt');
+      expect(existsSync(sourceFile)).to.equal(true);
+      var changeInstance = new change.ReplaceChange(sourceFile, 7, '', '{ fooComponent }');
+      return changeInstance
+        .apply()
+        .then(() => {
+          return fsPromise.readWithPromise(sourceFile);
+        }).then(contents => {
+          var expectedContents = 'import { fooComponent }* as foo from "./bar"';
+          expect(contents).to.equal(expectedContents);
+        });
+    });
+  });
+
+  describe('ReplaceChange with non-empty oldText and empty newText', () => {
+
+    beforeEach(() => {
+      var mockDrive = {
+        'src/app/my-component': {
+          'component-file.txt': 'import * as foo from "./bar"',
+        },
+        
+      };
+      mockFs(mockDrive);
+      sourcePath = path.join('src/app/my-component');
+    });
+
+    afterEach(() => {
+      mockFs.restore();
+    });
+
+    it('should replace text in the source code', () => {
+      var sourceFile = path.join(sourcePath, 'component-file.txt');
+      expect(existsSync(sourceFile)).to.equal(true);
+      var changeInstance = new change.ReplaceChange(sourceFile, 7, '* as foo', '');
+      return changeInstance
+        .apply()
+        .then(() => {
+          return fsPromise.readWithPromise(sourceFile);
+        }).then(contents => {
+          var expectedContents = 'import  from "./bar"';
+          expect(contents).to.equal(expectedContents);
+        });
+    });
   });
 });
