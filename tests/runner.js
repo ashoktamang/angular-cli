@@ -35,7 +35,7 @@ var glob = require('glob');
 var path = require('path');
 
 var root = 'tests/{acceptance,models,e2e}';
-var specFiles = glob.sync(root + '/**/*.spec.*');
+var specFiles = glob.sync(root + '/**/module-resolve.spec.*');
 var mocha = new Mocha({ timeout: 5000, reporter: 'spec' });
 
 process.env.CLI_ROOT = process.env.CLI_ROOT || path.resolve(__dirname, '..');

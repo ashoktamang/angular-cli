@@ -47,6 +47,7 @@ export class InsertChange implements Change {
    */
   apply(): Promise<any> {
     return readFile(this.path, 'utf8').then(content => {
+      console.log('content', content);
       let prefix = content.substring(0, this.pos);
       let suffix = content.substring(this.pos);
       return writeFile(this.path, `${prefix}${this.toAdd}${suffix}`);
