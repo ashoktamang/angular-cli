@@ -75,6 +75,26 @@ export function hasIndexFile(dirPath: string): Promise<Boolean> {
 }
 
 /**
+ * Function to get all the templates, stylesheets, and spec files of a given component unit
+ * 
+ * @param fileName 
+ * 
+ * @return absolute paths of '.html/.css/.sass/.spec.ts' files associated with the given file.
+ *
+ */
+export function getAllCorrespondingFiles(fileName: string): Promise<string[]> {
+  let fileDirName = path.dirname(fileName);
+  let componentName = path.basename(fileName).split('.')[0];
+  const globSearch = denodeify(glob);
+  return globSearch(path.join(fileDirName, `${componentName}.*`), { nodir: true })
+    .then((files: string[]) => {
+      return files.filter((file) => {
+        return (path.basename(file) !== 'index.ts');
+      });
+    });
+}
+
+/**
  * Returns a map of all dependent file/s' path with their moduleSpecifier object
  * (specifierText, pos, end)
  * 
@@ -86,7 +106,7 @@ export function hasIndexFile(dirPath: string): Promise<Boolean> {
  */
 export function getDependentFiles(fileName: string, rootPath: string): Promise<ModuleMap> {
   const globSearch = denodeify(glob);
-  return globSearch(path.join(rootPath, '**/*.*.ts'), { nodir: true })
+  return globSearch(path.join(rootPath, '**/*.ts'), { nodir: true })
     .then((files: string[]) => Promise.all(files.map(file => createTsSourceFile(file)))
     .then((tsFiles: ts.SourceFile[]) => tsFiles.map(file => getImportClauses(file)))
     .then((moduleSpecifiers: ModuleImport[][]) => {
