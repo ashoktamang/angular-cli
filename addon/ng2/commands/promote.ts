@@ -186,21 +186,16 @@ const PromoteCommand = Command.extend({
         resolver.resolveDependentFiles(),
         resolver.resolveOwnImports()
       ])
-      // .then(([changesForDependentFiles, changesForOwnImports]) => {
-      //   let allChanges = changesForDependentFiles.concat(changesForOwnImports);
-      //   return resolver.applySortedChangePromise(allChanges);
-      // })
+      .then(([changesForDependentFiles, changesForOwnImports]) => {
+        let allChanges = changesForDependentFiles.concat(changesForOwnImports);
+        return resolver.applySortedChangePromise(allChanges);
+      })
       // Move the related files to new path.
-      .then(() => getAllCorrespondingFiles(oldPath))
+      .then(() => dependentFilesUtils.getAllCorrespondingFiles(oldPath))
       .then((files: string[]) => {
         return files.map((file) => move(file, path.join(newPath, path.basename(file))));
       })
       .then(() => console.log(`${chalk.green(oldPath)} is promoted to ${chalk.green(newPath)}.`));
-
-    // Experiment
-    // let fileName = path.resolve(process.env.PWD, 'bar/bar.component.ts');
-    // return resolver.getMergeableImports(fileName, '../multiple')
-    //   .then((value) => console.log('bhalu', value));
   },
 });
 
