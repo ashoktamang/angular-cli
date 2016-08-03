@@ -25,9 +25,11 @@ The generated project has dependencies that require **Node 4 or greater**.
 * [Installation](#installation)
 * [Usage](#usage)
 * [Generating a New Project](#generating-and-serving-an-angular2-project-via-a-development-server)
-* [Generating Components, Directives, Pipes and Services](#generating-other-scaffolds)
+* [Generating Components, Directives, Pipes and Services](#generating-components-directives-pipes-and-services)
 * [Generating a Route](#generating-a-route)
 * [Creating a Build](#creating-a-build)
+* [Build Targets and Environment Files](#build-targets-and-environment-files)
+* [Bundling](#bundling)
 * [Running Unit Tests](#running-unit-tests)
 * [Running End-to-End Tests](#running-end-to-end-tests)
 * [Deploying the App via GitHub Pages](#deploying-the-app-via-github-pages)
@@ -36,7 +38,9 @@ The generated project has dependencies that require **Node 4 or greater**.
 * [Commands autocompletion](#commands-autocompletion)
 * [CSS preprocessor integration](#css-preprocessor-integration)
 * [3rd Party Library Installation](#3rd-party-library-installation)
+* [Updating angular-cli](#updating-angular-cli)
 * [Known Issues](#known-issues)
+* [Development Hints for hacking on angular-cli](#development-hints-for-hacking-on-angular-cli)
 
 ## Installation
 
@@ -66,7 +70,7 @@ You can configure the default HTTP port and the one used by the LiveReload serve
 ng serve --port 4201 --live-reload-port 49153
 ```
 
-### Generating other scaffolds
+### Generating Components, Directives, Pipes and Services
 
 You can use the `ng generate` (or just `ng g`) command to generate Angular components:
 
@@ -90,28 +94,15 @@ Component | `ng g component my-new-component`
 Directive | `ng g directive my-new-directive`
 Pipe      | `ng g pipe my-new-pipe`
 Service   | `ng g service my-new-service`
+Class     | `ng g class my-new-class`
+Interface | `ng g interface my-new-interface`
+Enum      | `ng g enum my-new-enum`
 
 ### Generating a route
 
-You can generate a new route with the following command (note the singular
-used in `hero`):
+Generating routes in the CLI has been disabled for the time being. A new router and new route generation blueprints are coming.
 
-```bash
-ng generate route hero
-```
-
-This will create a folder which will contain the hero component and related test and style files.
-
-The generated route will also be registered with the parent component's `@RouteConfig` decorator.
-
-By default the route will be designated as a **lazy** route which means that it will be loaded into the browser when needed, not upfront as part of a bundle.
-
-In order to visually distinguish lazy routes from other routes the folder for the route will be prefixed with a `+` per the above example the folder will be named `+hero`.
-This is done in accordance with the [style guide](https://angular.io/styleguide#!#prefix-lazy-loaded-folders-with-).
-
-The default lazy nature of routes can be turned off via the lazy flag (`--lazy false`)
-
-There is an optional flag for `skip-router-generation` which will not add the route to the parent component's `@RouteConfig` decorator.
+You can read the official documentation for the new Router here: https://angular.io/docs/ts/latest/guide/router.html. Please note that even though route generation is disabled, building your projects with routing is still fully supported.
 
 ### Creating a build
 
@@ -121,14 +112,39 @@ ng build
 
 The build artifacts will be stored in the `dist/` directory.
 
-### Environments
+### Build Targets and Environment Files
 
-At build time, the `src/client/app/environment.ts` will be replaced by either
-`config/environment.dev.ts` or `config/environment.prod.ts`, depending on the
-current cli environment.
+A build can specify both a build target (`development` or `production`) and an 
+environment file to be used with that build. By default, the development build 
+target is used.
 
-Environment defaults to `dev`, but you can generate a production build via
-the `-prod` flag in either `ng build -prod` or `ng serve -prod`.
+At build time, `src/app/environments/environment.ts` will be replaced by
+`src/app/environments/environment.{NAME}.ts` where `NAME` is the argument 
+provided to the `--environment` flag.
+
+These options also apply to the serve command. If you do not pass a value for `environment`,
+it will default to `dev` for `development` and `prod` for `production`.
+
+```bash
+# these are equivalent
+ng build --target=production --environment=prod
+ng build --prod --env=prod
+ng build --prod
+# and so are these
+ng build --target=development --environment=dev
+ng build --dev --e=dev
+ng build --dev
+ng build
+```
+
+You can also add your own env files other than `dev` and `prod` by creating a
+`src/app/environments/environment.{NAME}.ts` and use them by using the `--env=NAME`
+flag on the build/serve commands.
+
+### Bundling
+
+Builds created with the `-prod` flag via `ng build -prod` or `ng serve -prod` bundle
+all dependencies into a single file, and make use of tree-shaking techniques.
 
 ### Running unit tests
 
@@ -136,13 +152,7 @@ the `-prod` flag in either `ng build -prod` or `ng serve -prod`.
 ng test
 ```
 
-Tests will execute after a build is executed via [Karma](http://karma-runner.github.io/0.13/index.html), and it will automatically watch your files for changes.
-
-You can run tests a single time via `--watch=false`, and turn off building of the app via `--build=false` (useful for running it at the same time as `ng serve`).
-
-**WARNING:** On Windows, `ng test` is hitting a file descriptor limit (see https://github.com/angular/angular-cli/issues/977).
-The solution for now is to instead run `ng serve` and `ng test --build=false` in separate console windows. 
-
+Tests will execute after a build is executed via [Karma](http://karma-runner.github.io/0.13/index.html), and it will automatically watch your files for changes. You can run tests a single time via `--watch=false`.
 
 ### Running end-to-end tests
 
@@ -152,7 +162,7 @@ ng e2e
 
 Before running the tests make sure you are serving the app via `ng serve`.
 
-End-to-end tests are ran via [Protractor](https://angular.github.io/protractor/).
+End-to-end tests are run via [Protractor](https://angular.github.io/protractor/).
 
 
 ### Deploying the app via GitHub Pages
@@ -196,7 +206,7 @@ You can modify the these scripts in `package.json` to run whatever tool you pref
 
 ### Support for offline applications
 
-The index.html file includes a commented-out code snippet for installing the angular2-service-worker. This support is experimental, please see the angular/mobile-toolkit project for documentation on how to make use of this functionality.
+Angular-CLI includes support for offline applications via the `--mobile` flag on `ng new`. Support is experimental, please see the angular/mobile-toolkit project and https://mobile.angular.io/ for documentation on how to make use of this functionality.
 
 ### Commands autocompletion
 
@@ -223,19 +233,76 @@ source ~/.bash_profile
 
 ### CSS Preprocessor integration
 
-We support all major CSS preprocessors:
-- sass (node-sass)
-- less (less)
-- compass (compass-importer + node-sass)
-- stylus (stylus)
+Angular-CLI supports all major CSS preprocessors:
+- sass/scss ([http://sass-lang.com/](http://sass-lang.com/))
+- less ([http://lesscss.org/](http://lesscss.org/))
+- compass ([http://compass-style.org/](http://compass-style.org/))
+- stylus ([http://stylus-lang.com/](http://stylus-lang.com/))
 
-To use one just install for example `npm install node-sass` and rename `.css` files in your project to `.scss` or `.sass`. They will be compiled automatically.
+To use these prepocessors simply add the file to your component's `styleUrls`:
 
-The `Angular2App`'s options argument has `sassCompiler`, `lessCompiler`, `stylusCompiler` and `compassCompiler` options that are passed directly to their respective CSS preprocessors.
+```
+@Component({
+  moduleId: module.id,
+  selector: 'app-root',
+  templateUrl: 'app.component.html',
+  styleUrls: ['app.component.scss']
+})
+export class AppComponent {
+  title = 'app works!';
+}
+```
+
+When generating a new project you can also define which extention you want for
+style files:
+
+```bash
+ng new sassy-project --style=sass
+```
+
+Or set the default style on an existing project:
+
+```bash
+ng set defaults.styleExt scss
+```
 
 ### 3rd Party Library Installation
 
-The installation of 3rd party libraries are well described at our [Wiki Page](https://github.com/angular/angular-cli/wiki/3rd-party-libs)
+Simply install your library via `npm install lib-name --save` and import it in your code.
+
+If the library does not include typings, you can install them using npm:
+
+```bash
+npm install moment --save
+npm install @types/moment --save-dev
+```
+
+### Updating angular-cli
+
+To update `angular-cli` to a new version, you must update both the global package and your project's local package.
+
+Global package:
+```
+npm uninstall -g angular-cli
+npm cache clean
+npm install -g angular-cli@latest
+```
+
+Local project package:
+```
+rm -rf node_modules dist tmp
+npm install --save-dev angular-cli@latest
+ng init
+```
+
+Running `ng init` will check for changes in all the auto-generated files created by `ng new` and allow you to update yours. You are offered four choices for each changed file: `y` (overwrite), `n` (don't overwrite), `d` (show diff between your file and the updated file) and `h` (help).
+
+Carefully read the diffs for each code file, and either accept the changes or incorporate them manually after `ng init` finishes.
+
+**The main cause of errors after an update is failing to incorporate these updates into your code**. 
+
+You can find more details about changes between versions in [CHANGELOG.md](https://github.com/angular/angular-cli/blob/master/CHANGELOG.md).
+
 
 ## Known issues
 
@@ -277,6 +344,8 @@ the local `angular-cli` from the project which was fetched remotely from npm.
 `npm link angular-cli` symlinks the global `angular-cli` package to the local `angular-cli` package.
 Now the `angular-cli` you cloned before is in three places:
 The folder you cloned it into, npm's folder where it stores global packages and the `angular-cli` project you just created.
+
+You can also use `ng new foo --link-cli` to automatically link the `angular-cli` package.
 
 Please read the official [npm-link documentation](https://www.npmjs.org/doc/cli/npm-link.html)
 and the [npm-link cheatsheet](http://browsenpm.org/help#linkinganynpmpackagelocally) for more information.

@@ -1,10 +1,6 @@
-import {
-  describe,
-  ddescribe,
-  expect,
-  iit,
-  it
-} from '@angular/core/testing';
+/* tslint:disable:no-unused-variable */
+
+import { addProviders, async, inject } from '@angular/core/testing';
 import {<%= classifiedModuleName %>} from './<%= fileName %>';
 
 describe('<%= classifiedModuleName %>', () => {

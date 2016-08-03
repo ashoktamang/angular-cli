@@ -1,69 +1,84 @@
 'use strict';
 
-import * as ts from 'typescript';
+import * as Promise from 'ember-cli/lib/ext/promise';
 import * as fs from 'fs';
-import { readWithPromise, writeWithPromise } from './fs-promise';
+
+const readFile = Promise.denodeify(fs.readFile);
+const writeFile = Promise.denodeify(fs.writeFile);
 
 export interface Change {
-/**
- *  True on success, false otherwise.
- */  
- apply(): Promise<void>;
+
+  apply(): Promise<void>;
 
   // The file this change should be applied to. Some changes might not apply to
   // a file (maybe the config).
-  path: string | null;
+  path: string;
 
   // The order this change should be applied. Normally the position inside the file.
   // Changes are applied from the bottom of a file to the top.
-  order: number | null;
+  order: number;
 
   // The description of this change. This will be outputted in a dry or verbose run.
   description: string;
 }
 
-
 /**
  * Will add text to the source code.
  */
 export class InsertChange implements Change {
-  
-  const order: number; //don't know what this does yet
-  const description: string =  "";
-  // content: string;
-  
-  constructor(public path: string, private pos: number, private toAdd: string){ }
+
+   order: number;
+   description: string;
+
+  constructor(
+      public path: string,
+      private pos: number,
+      private toAdd: string
+      ) {
+    if (pos < 0) {
+      throw new Error('Negative positions are invalid');
+    }
+    this.description = `Inserted ${toAdd} into position ${pos} of ${path}`;
+    this.order = pos;
+  }
 
   /**
-   * This method does not insert spaces if there is none in the original string. 
-   * @param file (path to file)
-   * @param pos
-   * @param toAdd (text to add)
-   * @return Promise with a description on success or reject on error
+   * This method does not insert spaces if there is none in the original string.
    */
-  apply(): Promise<any>{
-    return readWithPromise(this.path).then(content => {
-      content = content.substring(0, this.pos) + this.toAdd + content.substring(this.pos);
-      return writeWithPromise(this.path, content);
+  apply(): Promise<any> {
+    return readFile(this.path, 'utf8').then((content: string) => {
+      let prefix = content.substring(0, this.pos);
+      let suffix = content.substring(this.pos);
+      return writeFile(this.path, `${prefix}${this.toAdd}${suffix}`);
     });
   }
 }
 
 /**
  * Will remove text from the source code.
- */ 
+ */
 export class RemoveChange implements Change {
-    const order: number;
-    const description: string = "";
 
-  constructor(public path: string, private pos: number, private toRemove: string){ }
-  
-  apply(): Promise<any>{
+  order: number;
+  description: string;
 
-    return readWithPromise(this.path).then(content => {
-      content = content.substring(0, this.pos) + content.substring(this.pos + this.toRemove.length);
-      
-      return writeWithPromise(this.path, content);
+  constructor(
+      public path: string,
+      private pos: number,
+      private toRemove: string) {
+    if (pos < 0) {
+      throw new Error('Negative positions are invalid');
+    }
+    this.description = `Removed ${toRemove} into position ${pos} of ${path}`;
+    this.order = pos;
+  }
+
+  apply(): Promise<any> {
+    return readFile(this.path, 'utf8').then((content: string) => {
+      let prefix = content.substring(0, this.pos);
+      let suffix = content.substring(this.pos + this.toRemove.length);
+      // TODO: throw error if toRemove doesn't match removed string.
+      return writeFile(this.path, `${prefix}${suffix}`);
     });
   }
 }
@@ -73,27 +88,27 @@ export class RemoveChange implements Change {
  */
 export class ReplaceChange implements Change {
 
-  const description: string = "";
-  
-  
-  constructor(public path: string, private pos: number, private oldText: string, private newText: string){ }
-  
-  apply(): Promise<any>{
-    return readWithPromise(this.path).then(content => {
-       content = content.substring(0, this.pos) + this.newText + content.substring(this.pos + this.oldText.length);
-       writeWithPromise(this.path, content);
-       this.description = "Replaced '" + this.oldText + "' with '" + this.newText + "' in file";
+  order: number;
+  description: string;
+
+  constructor(
+      public path: string,
+      private pos: number,
+      private oldText: string,
+      private newText: string) {
+    if (pos < 0) {
+      throw new Error('Negative positions are invalid');
+    }
+    this.description = `Replaced ${oldText} into position ${pos} of ${path} with ${newText}`;
+    this.order = pos;
+  }
+
+  apply(): Promise<any> {
+    return readFile(this.path, 'utf8').then((content: string) => {
+      let prefix = content.substring(0, this.pos);
+      let suffix = content.substring(this.pos + this.oldText.length);
+      // TODO: throw error if oldText doesn't match removed string.
+      return writeFile(this.path, `${prefix}${this.newText}${suffix}`);
     });
   }
-}
-
-/**
- * Will output a message for the user to fulfill.
- */
-export class MessageChange implements Change {
-  constructor(text: string){
-      
-  }
-
-  apply(): Promise<void> {return new Promise();}
 }

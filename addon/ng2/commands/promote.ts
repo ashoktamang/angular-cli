@@ -1,168 +1,207 @@
-import { readFileSync } from 'fs';
-import * as ts from 'typescript';
 import * as Command from 'ember-cli/lib/models/command';
-import * as path from 'path';
-import * as child_process from 'child_process';
 import * as fs from 'fs';
-var chalk = require('chalk');
-import * as addBarrelREgistration from '../utilites/barrel-management';
+import * as path from 'path';
+import * as glob from 'glob';
+import * as chalk from 'chalk';
+import * as SilentError from 'silent-error';
+import * as denodeify from 'denodeify';
+import { Promise } from 'es6-promise';
+import { ModuleResolver } from '../utilities/module-resolver';
+import * as dependentFilesUtils from '../utilities/get-dependent-files';
 
+// denodeify asynchronous methods
+// const stat = denodeify(fs.stat);
+const move = denodeify(fs.rename);
+// const access = denodeify(fs.access);
+const globSearch = denodeify(glob);
 
 const PromoteCommand = Command.extend({
   name: 'promote',
-  description: 'Updates component promotion if it is safe',
-  // aliases: ['v', '--version', '-v'],
-  works: 'everywhere',
+  description: 'rewrite imports and exports when the file is moved',
+  aliases: ['p'],
+  works: 'insideProject',
+  anonymousOptions: ['<oldFilePath> <newDir>'],
 
-  // availableOptions: [{
-  //   name: 'verbose',
-  //   type: Boolean, 'default': false
-  // }],
-  
-  beforeRun: function(rawArgs: string) {
-    // Checks empty arguments
-    if (rawArgs.length < 2) {
-      console.log('error');
-      // return;
-    };
-    
-    
-    
-    // Checks if arguments are path or specific file.
-    // Error for specific files (for now!)
-    rawArgs.forEach(argument => {
-      console.log(path.extname(argument));
-      if (!path.extname(argument) == '') {
-        console.log('error');
-        // return;
-      };
-    })
-  },
-  
-  run: function (options, rawArgs) {
-    
-    console.log(options);
-    console.log(rawArgs);
-    
-    //sourcePath and destinationPath
-    let sourcePath = rawArgs[0];
-    let destinationPath = rawArgs[1];
-    
-    // Case 1: If sourcePath and destinationPath has same parent directory.
-    // [Todo: Update references in files]
-    if (path.dirname(sourcePath) === path.dirname(destinationPath)) {
-      let oldComponentName = path.basename(sourcePath);
-      let newComponentName = path.basename(destinationPath);
-      let relativePath: string = process.cwd();
-      
-      fs.rename(sourcePath, destinationPath);
-      
-      let files: string[] = fs.readdirSync(sourcePath);
-      console.log(files);
-      files.forEach(file => {
-        console.log(file.indexOf(oldComponentName) > -1);
-        if (file.indexOf(oldComponentName) > -1) {
-          console.log(file);
-          let newFileName = file.replace(oldComponentName, newComponentName);
-          console.log(newFileName);
-          fs.rename(path.join(relativePath, destinationPath, file), path.join(relativePath, destinationPath, newFileName));
-          console.log(path.join(relativePath, destinationPath, file));
-          console.log(path.join(relativePath, destinationPath, newFileName));
-        }
-      })
-    }
-    
+  beforeRun: function(rawArgs: string[]) {
+      // All operations should be sync in beforeRun.
 
-    // 
-    
-    
-    // Returns the name of SyntaxKind from the enum
-    function syntaxKindToName(kind: ts.SyntaxKind) {
-        return (<any>ts).SyntaxKind[kind];
-    }
-    
-    // Recursive magic¿
-    function printAllChildren(node: ts.Node, depth = 0) {
-        console.log(new Array(depth+1).join('----'), syntaxKindToName(node.kind), node.pos, node.end);
-        depth++;
-        node.getChildren().forEach(c=> printAllChildren(c, depth));
-    } 
-        
-    // wrapper function that recursively traverses through nodes and calls visitNode for each Node
-    function visit(node: ts.Node, depth = 0) {
-      depth++;
-      node.getChildren().forEach(nodeObj =>{
-        visitNode(nodeObj);
-        visit(nodeObj, depth);
-      })
-    }
-    
-    // [to:do] optimize the function
-    function importDeclaration(node: ts.Node, depth = 0) {
-      depth++;
-      node.getChildren().forEach(nodeObj => {
-        if (nodeObj.kind === ts.SyntaxKind.ImportDeclaration) {
-          console.log('it goes here');
-          console.log('nodeobj', nodeObj);
-          // return nodeObj;
-        };
-        importDeclaration(nodeObj, depth);
-      })
-    }
-    
-    
-    // assesses a node's kind and {{ logic }}
-    function visitNode(node: ts.Node): boolean {
-      // console.log(node.kind);
-      switch (node.kind) {
-        case ts.SyntaxKind.ImportSpecifier:
-          console.log("ImportSpecifier");
-          console.log(node.name.text);
-          node.name.text = "ashok";
-          console.log('changed', node.name.text);
-          break;
-        // case ts.SyntaxKind.ImportDeclaration:
-        //   console.log('ImportDeclaration');
-        //   console.log(node);
-        //   break;
-        // case ts.SyntaxKind.ImportKeyword:
-        //   console.log('ImportKeyword');
-        //   console.log(node.name);
-        //   break;
-        case ts.SyntaxKind.ImportClause:
-          console.log('ImportClause');
-          console.log(node.parent.moduleSpecifier.text);
-          break;
-        // case ts.SyntaxKind.StringLiteral:
-        //   console.log('StringLiteral for Imports');
-        //   console.log(node);
-        //   break;
-        default:
-
-          return false;
+      if (rawArgs.length === 0) {
+        throw new SilentError(chalk.red('Please pass the arguments: ') +
+                              chalk.cyan('ng promote <oldPath> <newPath>'));
       }
-      return true;
-    }
-    
-    const fileNames = process.argv.slice(3);
-    console.log(fileNames);
-  //   fileNames.forEach(fileName => {
-  //     let sourceFile = ts.createSourceFile(fileName, readFileSync(fileName).toString(), ts.ScriptTarget.ES6, true);
-  //     // console.log(sourceFile);
-      
-  //     // console.log(importDeclaration(sourceFile));
-      
-      
-  //     // visit(sourceFile);
-  //     // printAllChildren(sourceFile);
-  //   });
-    
-  //   // console.log(ts.sys.getCurrentDirectory());
-  // },
+      // Current Directory in the project.
+      const CWD = process.env.PWD;
 
-  
+      let filePaths: string[] = rawArgs
+        .map((argument: string) => path.resolve(CWD, argument));
+
+      // Validate first argument <oldPath>
+      let oldPath = filePaths[0];
+
+      const oldPathStats = fs.statSync(oldPath);
+      // Check if it is a file.
+      if (!oldPathStats.isFile()) {
+        throw new SilentError(chalk.red('Give the full path of file.'));
+      };
+      // Throw error if a file is not a typescript file.
+      if (path.extname(oldPath) !== '.ts') {
+        throw new SilentError(`The file is not a typescript file: ${oldPath}`);
+      };
+      // Throw error if a file is an index file.
+      if (path.basename(oldPath) === 'index.ts') {
+        throw new SilentError(`Cannot promote index file: ${oldPath}`);
+      };
+      // Throw error if a file is a spec file.
+      if (path.extname(path.basename(oldPath, '.ts')) === '.spec') {
+        throw new SilentError(`Cannot promote a spec file: ${oldPath}`);
+      };
+      // Check the permission to read and/or write in the file.
+      fs.accessSync(oldPath, fs.R_OK || fs.W_OK);
+
+      // Validate second argument <newPath>
+      const newPath = filePaths[1];
+      const newPathStats = fs.statSync(newPath);
+
+      // Check if it is a directory
+      if (!newPathStats.isDirectory) {
+        throw new SilentError(`newPath must be a directory: ${newPath}`);
+      };
+      // Check the permission to read/write/execute(move) in the directory.
+      fs.accessSync(newPath, fs.R_OK || fs.X_OK || fs.W_OK);
+      // Check for any files with the same name as oldPath.
+      let sameNameFiles = glob.sync(path.join(newPath, '*.*.ts'), { nodir: true })
+        .filter((file) => path.basename(file) === path.basename(oldPath));
+      if (sameNameFiles.length > 0) {
+        throw new SilentError(`newPath has a file with same name as oldPath: ${sameNameFiles}`);
+      };
+
+
+      // <Async>
+
+      // Checking whether file exists
+      // console.log(chalk.grey('Checking the existence of the file.........'));
+      // fs.stat(oldPath, (err, stats) => {
+      //   if (err) {
+      //     throw new SilentError('No such file exists in the project. Try a valid file name');
+      //   } else {
+      //     console.log(chalk.green('Path exists!'));
+      //     if (!stats.isFile()) {
+      //       throw new SilentError(chalk.red('Give the full path of file.'));
+      //     }
+      //     console.log(chalk.grey('Checking the extension of the file: \'ts\'...........'));
+      //     if (path.extname(oldPath) !== '.ts') {
+      //       throw new SilentError('The file is not a typescript file');
+      //     } else {
+      //       console.log(chalk.green('Extension of the file is correct'));
+      //       console.log(chalk.grey('Finally, checking the permission of the file'));
+      //       fs.access(oldPath, fs.R_OK || fs.W_OK, (accessError) => {
+      //         if (accessError) {
+      //           console.log(accessError);
+      //           throw new SilentError(chalk.red('No permission to read and/or write.'));
+      //         } else {
+      //           console.log(chalk.green('All permission to read and/or write.'));
+      //         }
+      //       });
+      //     }
+      //   }
+      // });
+
+      // Validating second argument <newPath>
+      // let newPath = filePaths[1];
+      // fs.stat(newPath, (err, stats) => {
+      //   if (err) {
+      //     throw new SilentError('newPath is an invalid path.');
+      //   };
+      //   if (!stats.isDirectory()) {
+      //     throw new SilentError('newPath must be a directory.');
+      //   };
+      // });
+      // fs.access(newPath, fs.R_OK || fs.X_OK || fs.W_OK, (err) => {
+      //   if (err) {
+      //     throw new SilentError(chalk.red('No permission'));
+      //   };
+      //   globSearch(path.join(newPath, '*.*.ts'), { nodir: true })
+      //     .then((filesInPath: string[]) => {
+      //       filesInPath.forEach(file => {
+      //         if (path.basename(file) === path.basename(oldPath)) {
+      //           throw new SilentError('newPath has a file with same name as oldPath');
+      //         };
+      //       });
+      //     });
+      // });
+  },
+
+  run: function (commandOptions, rawArgs: string[]) {
+
+    console.log('running');
+    // Get absolute paths of old path and new path
+    let filePaths: string[] = rawArgs
+      .map((argument: string) => path.resolve(process.env.PWD, argument));
+    const oldPath = filePaths[0];
+    const newPath = filePaths[1];
+    const ROOT_PATH = path.resolve('src/app');
+
+    /**
+     * Function to get all the templates, stylesheets, and spec files of a given component unit
+     * 
+     * @param fileName 
+     * 
+     * @return absolute paths of '.html/.css/.sass/.spec.ts' associated with the given file.
+     *
+     */
+    function getAllCorrespondingFiles(fileName: string): Promise<string[]> {
+      // make a utility function in a different file?`
+      let fileDirName = path.dirname(fileName);
+      let componentName = path.basename(fileName).split('.')[0];
+
+      return globSearch(path.join(fileDirName, `${componentName}.*`), { nodir: true })
+        .then((files: string[]) => {
+          return files.filter((file) => {
+            return (path.basename(file) !== 'index.ts');
+          });
+        });
+    }
+
+    console.log(path.resolve('src/app'));
+    // let resolver = new ModuleResolver(oldPath, newPath);
+    // return resolver.resolveDependentFiles();
+    // //   .then(() => console.log(chalk.green('Resolved the imports of Dependent Files')))
+    //   .then(() => resolver.resolveOwnImports())
+    // //   .then(() => console.log(chalk.green('Resolved own Imports')))
+    //   .then(() => resolver.resolveExport())
+    // //   .then(() => console.log(chalk.green('Resolved exports in index files')))
+    //   // .then(() => resolver.mergeImports())
+    //   .then(() => getAllCorrespondingFiles(oldPath))
+    //   .then((files: string[]) => {
+    //     files.forEach((file) => {
+    //       move(file, path.join(newPath, path.basename(file)))
+    //         .then(() => console.log(chalk.green(`${file} is moved to ${newPath}.`)));
+    //     });
+    //   });
+
+
+    let resolver = new ModuleResolver(oldPath, newPath, ROOT_PATH);
+    console.log('Promoting...');
+    return Promise.all([
+        resolver.resolveDependentFiles(),
+        resolver.resolveOwnImports()
+      ])
+      // .then(([changesForDependentFiles, changesForOwnImports]) => {
+      //   let allChanges = changesForDependentFiles.concat(changesForOwnImports);
+      //   return resolver.applySortedChangePromise(allChanges);
+      // })
+      // Move the related files to new path.
+      .then(() => getAllCorrespondingFiles(oldPath))
+      .then((files: string[]) => {
+        return files.map((file) => move(file, path.join(newPath, path.basename(file))));
+      })
+      .then(() => console.log(`${chalk.green(oldPath)} is promoted to ${chalk.green(newPath)}.`));
+
+    // Experiment
+    // let fileName = path.resolve(process.env.PWD, 'bar/bar.component.ts');
+    // return resolver.getMergeableImports(fileName, '../multiple')
+    //   .then((value) => console.log('bhalu', value));
+  },
 });
 
-
 module.exports = PromoteCommand;
-module.exports.overrideCore = true;
