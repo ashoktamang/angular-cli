@@ -106,7 +106,7 @@ export function getAllCorrespondingFiles(fileName: string): Promise<string[]> {
  */
 export function getDependentFiles(fileName: string, rootPath: string): Promise<ModuleMap> {
   const globSearch = denodeify(glob);
-  return globSearch(path.join(rootPath, '**/*.ts'), { nodir: true })
+  return globSearch(path.join(rootPath, '**/*.*.ts'), { nodir: true })
     .then((files: string[]) => Promise.all(files.map(file => createTsSourceFile(file)))
     .then((tsFiles: ts.SourceFile[]) => tsFiles.map(file => getImportClauses(file)))
     .then((moduleSpecifiers: ModuleImport[][]) => {
@@ -117,12 +117,13 @@ export function getDependentFiles(fileName: string, rootPath: string): Promise<M
       });
       return allFiles;
     })
-    .then((allFiles: ModuleMap) => {
+    .then((allFiles: ModuleMap) => hasIndexFile(path.dirname(fileName))
+    .then((hasIndexFile: boolean) => {
       let relevantFiles: ModuleMap = {};
-      Object.keys(allFiles).forEach(filePath => {
-        const tempModuleSpecifiers: ModuleImport[] = allFiles[filePath]
+      Object.keys(allFiles).forEach((filePath: string) => {
+        let tempModuleSpecifiers: ModuleImport[] = allFiles[filePath]
           .filter(importClause => {
-            // Filter only relative imports
+            // Filter only relative import
             let singleSlash = importClause.specifierText.charAt(0) === '/';
             let currentDirSyntax = importClause.specifierText.slice(0, 2) === './';
             let parentDirSyntax = importClause.specifierText.slice(0, 3) === '../';
@@ -133,12 +134,17 @@ export function getDependentFiles(fileName: string, rootPath: string): Promise<M
             let resolvedFileName = path.resolve(fileName);
             let fileBaseName = path.basename(resolvedFileName, '.ts');
             let parsedFilePath = path.join(path.dirname(resolvedFileName), fileBaseName);
-            return (parsedFilePath === modulePath) || (resolvedFileName === modulePath);
-          });
+            let fileDirName = path.dirname(resolvedFileName);
+            if (hasIndexFile) {
+              return fileDirName === modulePath;
+            } else {
+              return (parsedFilePath === modulePath) || (resolvedFileName === modulePath);
+            };
+        });
         if (tempModuleSpecifiers.length > 0) {
           relevantFiles[filePath] = tempModuleSpecifiers;
         };
       });
       return relevantFiles;
-    }));
+    })));
 }
