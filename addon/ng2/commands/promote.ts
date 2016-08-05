@@ -156,7 +156,7 @@ const PromoteCommand = Command.extend({
       // Experiment
       let newIndex = path.join(newPath, 'index.ts');
       let oldIndex = path.join(path.dirname(oldPath), 'index.ts');
-      return resolver.hasPromotedSymbols(newIndex, oldIndex)
+      return resolver.resolveExport()
         .then((bhalu) => console.log(bhalu));
   },
 });

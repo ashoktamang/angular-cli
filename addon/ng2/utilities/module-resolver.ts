@@ -3,7 +3,8 @@
 import * as path from 'path';
 import * as ts from 'typescript';
 import * as dependentFilesUtils from './get-dependent-files';
-
+import * as glob from 'glob';
+import * as denodeify from 'denodeify';
 import { Promise } from 'es6-promise';
 import { Change, InsertChange, RemoveChange, ReplaceChange } from './change';
 
@@ -217,12 +218,6 @@ export class ModuleResolver {
   }
 
   hasPromotedSymbols(newIndexFile: string, oldIndexFile: string) {
-    /**
-     * get symbols from oldindex
-     * if * return promise.all(oldIndexsymbols, newIndexsymbols)
-     * else return promise.all(filesymbols, newIndexsymbols)
-     * compare, return true if its there.
-     */
     return dependentFilesUtils.createTsSourceFile(oldIndexFile)
       .then((tsFile) => this.getExportDeclaration(tsFile))
       .then((exportModules: ModuleExport[]) => {
@@ -265,9 +260,11 @@ export class ModuleResolver {
         let flatNewIndexSymbolsArray = newIndexSymbols.reduce((tempArray, exportedSymbol) => {
           return tempArray.concat(exportedSymbol);
         }, []);
-        console.log('flat', newIndexSymbols);
-      })
-      // .then(() => {return true;});
+        // Check new index to see if already exports promoted symbols
+        // Returns empty array if promoted symbols doesn't exist in new index.
+        return promotedSymbols
+          .filter((exportedSymbol) => flatNewIndexSymbolsArray.indexOf(exportedSymbol) !== -1);
+      });
   }
 /** 
    * Removes the export clause in oldFilePath's index file (if there is one) and 
@@ -277,52 +274,79 @@ export class ModuleResolver {
    */
   resolveExport(): Promise<Change[]> {
     const globSearch = denodeify(glob);
-    let oldFileDirPath = path.dirname(this.oldFilePath);
+    let oldIndexFile = path.join(path.dirname(this.oldFilePath), 'index.ts');
+    let newIndexFile = path.join(this.newFilePath, 'index.ts');
+    return Promise.all([
+      dependentFilesUtils.hasIndexFile(path.dirname(this.oldFilePath)),
+      dependentFilesUtils.hasIndexFile(this.newFilePath)
+    ])
+    .then(([hasOldIndexFile, hasNewIndexFile]) => {
+      if (hasOldIndexFile && hasNewIndexFile) {
+        return this.hasPromotedSymbols(newIndexFile, oldIndexFile)
+          .then((promotedSymbols) => {
+            if (promotedSymbols.length > 0) {
+              return Promise.reject(`There are already common symbols extraced: ${promotedSymbols}`);
+            } else {
+              return Promise.all([
+                hasOldIndexFile,
+                hasNewIndexFile
+              ]);
+            }
+          })
+      } else {
+        return Promise.all([
+          hasOldIndexFile,
+          hasNewIndexFile
+        ]);
+      }
+    })
+    .then(([hasOldIndex, hasNewIndex]) => {
+      let changes = [];
+      if (hasOldIndex) {
+        changes.push(this.resolveOldIndex(oldIndexFile));
+      };
+      if (hasNewIndex) {
+        changes.push(this.resolveNewIndex(newIndexFile));
+      }
+      // flatten the array
+      return Promise.all(changes.reduce);
+    })
+  }
 
-    return globSearch(path.join(oldFileDirPath, 'index.ts'), { nodir: true })
-      .then((oldIndex: string[]) => {
-        if (oldIndex.length > 0) {
-          let indexFile = oldIndex[0];
-          return dependentFilesUtils.createTsSourceFile(indexFile)
-            .then((tsFile: ts.SourceFile) => {
-              let exportModules = this.getExportDeclaration(tsFile);
-              let removeChanges: RemoveChange[] = exportModules
-                .filter(moduleBlock => {
-                  let specifierText = moduleBlock.specifierText;
-                  return `.${path.sep}${path.basename(this.oldFilePath, '.ts')}` === specifierText;
-                })
-                .map(moduleBlock => {
-                  let toRemove = `${moduleBlock.blockText}\n`;
-                  // Position is then added by 2 for '\n' at the end of export statement.
-                  let position = (moduleBlock.end + 2) - toRemove.length;
-                  return new RemoveChange(indexFile, position, toRemove);
-                });
-              return this.sortedChangePromise(removeChanges);
-            });
+  private resolveOldIndex(filePath: string) {
+    return dependentFilesUtils.createTsSourceFile(filePath)
+      .then((tsFile: ts.SourceFile) => {
+        let exportModules = this.getExportDeclaration(tsFile);
+        return exportModules
+          .filter(moduleBlock => {
+            let specifierText = moduleBlock.specifierText;
+            return `.${path.sep}${path.basename(this.oldFilePath, '.ts')}` === specifierText;
+          })
+          .map(moduleBlock => {
+            let toRemove = `${moduleBlock.blockText}\n`;
+            // Position is then added by 2 for '\n' at the end of export statement.
+            let position = (moduleBlock.end + 2) - toRemove.length;
+            return new RemoveChange(filePath, position, toRemove);
+          });
+      });
+  }
+
+  private resolveNewIndex(filePath: string) {
+    return dependentFilesUtils.createTsSourceFile(filePath)
+      .then((tsFile: ts.SourceFile) => {
+        let exportModules = this.getExportDeclaration(tsFile);
+        // Add export statement after last export staments
+        let toAdd: string;
+        let position: number;
+        if (exportModules.length === 0) {
+          position = 0;
+          toAdd = `export * from '.${path.sep}${path.basename(this.oldFilePath, '.ts')}';\n`;
+        } else {
+          // Position then is added by 1 to account for ';' at the end of export statment.
+          position = exportModules[exportModules.length - 1].end + 1;
+          toAdd = `\nexport * from '.${path.sep}${path.basename(this.oldFilePath, '.ts')}';`;
         };
-      })
-      .then(() => globSearch(path.join(this.newFilePath, 'index.ts'), { nodir: true }))
-      .then((newIndex: string[]) => {
-        if (newIndex.length > 0) {
-          let indexFile = newIndex[0];
-          return dependentFilesUtils.createTsSourceFile(indexFile)
-            .then((tsFile: ts.SourceFile) => {
-              let exportModules = this.getExportDeclaration(tsFile);
-              // Add export statement after last export staments
-              let toAdd: string;
-              let position: number;
-              if (exportModules.length === 0) {
-                position = 0;
-                toAdd = `export * from '.${path.sep}${path.basename(this.oldFilePath, '.ts')}';\n`;
-              } else {
-                // Position then is added by 1 to account for ';' at the end of export statment.
-                position = exportModules[exportModules.length - 1].end + 1;
-                toAdd = `\nexport * from '.${path.sep}${path.basename(this.oldFilePath, '.ts')}';`;
-              };
-              let addChange = new InsertChange(indexFile, position, toAdd);
-              return addChange.apply();
-            });
-        }
+        return new InsertChange(filePath, position, toAdd);
       });
   }
 }
