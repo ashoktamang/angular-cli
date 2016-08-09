@@ -153,18 +153,23 @@ Validation is required for the two arguments in the promote command. It is an im
   3. Validation in `newPath`
       * The argument should be a directory.
       * The directory must exist. (the command doesn’t create a new directory)
-      * The directory must not contain file with same name as <oldPath>
+      * The directory must not contain file with same name as `oldPath`.
       * The owner should have read/write/execute permission of the directory.
 * Validation is done in the `BeforeRun:` if any of the validation throws an error, whole promote process is stopped.
 
 Process (Steps)
 ----------------
-The command will execute following tasks in order.
+The promote command is extended from `Ember CLI`'s [`Command`](https://github.com/ember-cli/ember-cli/blob/master/lib/models/command.js) 
+object.
+The command will execute in two attribute methods of `Command` Object.
 
-1. Parse the provided arguments to get the absolute path.
-2. Create a new instance of class ModuleResolver
-3. Store all the changes for rewriting the imports of all dependent files in memory.
-4. Store all the changes for rewriting the imports of the moved file itself in memory.
-5. Apply all the changes.
-6. Move the file and its associated files to new path.
+* `beforeRun`: 
+  1. Validation process is executed. If any of the validation steps fails, then whole process is stopped with an `Error`.
+* `run`: 
+  1. Parse the provided arguments to get the absolute path.
+  2. Create a new instance of class ModuleResolver
+  3. Store all the changes for rewriting the imports of all dependent files in memory.
+  4. Store all the changes for rewriting the imports of the moved file itself in memory.
+  5. Apply all the changes.
+  6. Move the file and its associated files to new path.
 
