@@ -163,9 +163,9 @@ The promote command is extended from `Ember CLI`'s [`Command`](https://github.co
 object.
 The command will execute in two attribute methods of `Command` Object.
 
-* `beforeRun`: 
+* [`beforeRun`](https://github.com/ember-cli/ember-cli/blob/master/lib/models/command.js#L182): 
   1. Validation process is executed. If any of the validation steps fails, then whole process is stopped with an `Error`.
-* `run`: 
+* [`run`](https://github.com/ember-cli/ember-cli/blob/master/lib/models/command.js#L484): 
   1. Parse the provided arguments to get the absolute path.
   2. Create a new instance of class ModuleResolver
   3. Store all the changes for rewriting the imports of all dependent files in memory.
